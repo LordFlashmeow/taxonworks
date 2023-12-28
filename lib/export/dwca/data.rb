@@ -146,7 +146,7 @@ module Export::Dwca
       return @taxonworks_extension_data if @taxonworks_extension_data
 
       collection_object_ids = core_scope.select(:dwc_occurrence_object_id).pluck(:dwc_occurrence_object_id)
-      collection_objects = CollectionObject.joins(:dwc_occurrence).where(id: core_scope.select(:dwc_occurrence_object_id))
+      collection_objects = CollectionObject.where(id: core_scope.select(:dwc_occurrence_object_id))
 
       # select valid methods, generate frozen name string ahead of time
       # add TW prefix to names
@@ -218,17 +218,17 @@ module Export::Dwca
     def predicate_data
       return @predicate_data if @predicate_data
 
-      # TODO maybe replace with select? not best practice to use pluck as input to other query
+      collection_objects = core_scope.select(:dwc_occurrence_object_id)
       collection_object_ids = core_scope.select(:dwc_occurrence_object_id).pluck(:dwc_occurrence_object_id) # TODO: when AssertedDistributions are added we'll need to change this  pluck(:dwc_occurrence_object_id)
 
       # At this point we have specific CO ids, so we don't need project_id
       object_attributes = CollectionObject.left_joins(data_attributes: [:predicate])
-        .where(id: collection_object_ids)
+        .where(id: collection_objects)
         .where(data_attributes: { controlled_vocabulary_term_id: @data_predicate_ids[:collection_object_predicate_id] })
         .pluck(:id, 'controlled_vocabulary_terms.name', 'data_attributes.value')
 
       event_attributes = CollectionObject.left_joins(collecting_event: [data_attributes: [:predicate]])
-        .where(id: collection_object_ids)
+        .where(id: collection_objects)
         .where(data_attributes: { controlled_vocabulary_term_id: @data_predicate_ids[:collecting_event_predicate_id] })
         .pluck(:id, 'controlled_vocabulary_terms.name',  'data_attributes.value')
 
@@ -237,14 +237,14 @@ module Export::Dwca
 
       object_attributes.each do |attr|
         next if attr[1].nil?  # don't add headers for objects without predicates
-        header_name = 'TW:DataAttribute:CollectionObject:' + attr[1]
+        header_name = "TW:DataAttribute:CollectionObject:#{attr[1]}".freeze
         used_predicates.add(header_name)
         attr[1] = header_name
       end
 
       event_attributes.each do |attr|
         next if attr[1].nil?  # don't add headers for events without predicates
-        header_name = 'TW:DataAttribute:CollectingEvent:' + attr[1]
+        header_name = "TW:DataAttribute:CollectingEvent:#{attr[1]}".freeze
         used_predicates.add(header_name)
         attr[1] = header_name
       end

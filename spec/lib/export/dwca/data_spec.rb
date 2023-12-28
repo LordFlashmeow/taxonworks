@@ -72,6 +72,69 @@ describe Export::Dwca::Data, type: :model, group: :darwin_core do
         end
       end
 
+      context 'extension_scopes: [:predicate_extensions]' do
+        context 'co predicate data' do
+          let(:co_predicate) { FactoryBot.create(:valid_controlled_vocabulary_term_predicate) }
+          let!(:d) { Export::Dwca::Data.new(core_scope: scope, predicate_extensions: { collection_object_predicate_id: [co_predicate.id] }) }
+          let!(:co) { DwcOccurrence.last.dwc_occurrence_object }
+          let!(:da) { FactoryBot.create(:valid_data_attribute_internal_attribute, attribute_subject: co, predicate: co_predicate) }
+
+          specify '#predicate_data is a tempfile' do
+            expect(d.predicate_data).to be_kind_of(Tempfile)
+          end
+
+          specify '#predicate_data returns lines for all specimens' do
+            expect(d.predicate_data.count).to eq(6)
+          end
+
+          specify 'should have the correct headers' do
+            headers << "TW:DataAttribute:CollectionObject:#{co_predicate.name}"
+            expect(d.meta_fields).to contain_exactly(*headers)
+          end
+
+          specify 'should have the data attribute in the correct extension file row' do
+            expect(File.readlines(d.predicate_data).last&.strip).to eq(da.value)
+          end
+
+          specify 'should have the data attribute in the combined file' do
+            expect(File.readlines(d.all_data).last).to include(da.value)
+          end
+
+          specify 'predicate with no values should create an empty extension file' do
+            p2 = FactoryBot.create(:valid_controlled_vocabulary_term_predicate)
+            d = Export::Dwca::Data.new(core_scope: scope, predicate_extensions: { collection_object_predicate_id: [p2.id] })
+            expect(File.readlines(d.predicate_data).count).to eq(0)
+            expect(File.readlines(d.all_data).count).to_not eq(0)
+          end
+        end
+
+        context 'ce predicate data' do
+          let(:ce_predicate) { FactoryBot.create(:valid_controlled_vocabulary_term_predicate) }
+          let(:d) { Export::Dwca::Data.new(core_scope: scope, predicate_extensions: { collecting_event_predicate_id: [ce_predicate.id] }) }
+
+          let!(:ce) { FactoryBot.create(:valid_collecting_event) }
+          let!(:da) { FactoryBot.create(:valid_data_attribute_internal_attribute, attribute_subject: ce, predicate: ce_predicate) }
+
+          before do
+            co = CollectionObject.last
+            co.collecting_event_id = ce.id
+            co.save!
+          end
+
+          specify 'should include the predicate header' do
+            expect(d.meta_fields).to include("TW:DataAttribute:CollectingEvent:#{ce_predicate.name}")
+          end
+
+          specify 'should have the data attribute in the correct extension file row' do
+            expect(File.readlines(d.predicate_data).last&.strip).to eq(da.value)
+          end
+
+          specify 'should have the data attribute in the combined file' do
+            expect(File.readlines(d.all_data).last).to include(da.value)
+          end
+        end
+      end
+
       context 'taxonworks_extensions for internal attributes' do
 
         context 'exporting otu_name' do
